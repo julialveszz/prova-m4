@@ -1,0 +1,108 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+#define LED_AZUL 9
+#define LED_VERDE 41
+#define LED_VERMELHO 40
+#define LED_AMARELO 10
+
+const int BUTTON_PIN = 18;
+const int LDR_PIN = 4;
+const int THRESHOLD = 600;
+
+int buttonState = 0;
+int lastButtonState = 0;
+int buttonPressCount = 0;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+
+void setup() {
+  pinMode(LED_AZUL, OUTPUT);
+  pinMode(LED_VERDE, OUTPUT);
+  pinMode(LED_VERMELHO, OUTPUT);
+  pinMode(LED_AMARELO, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT);
+
+  digitalWrite(LED_AZUL, LOW);
+  digitalWrite(LED_VERDE, LOW);
+  digitalWrite(LED_VERMELHO, LOW);
+  digitalWrite(LED_AMARELO, LOW);
+
+  Serial.begin(9600);
+
+  WiFi.begin("Wokwi-GUEST", "");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    Serial.print(".");
+  }
+  Serial.println("Connected to WiFi");
+}
+
+void loop() {
+  int ldrStatus = analogRead(LDR_PIN);
+  int reading = digitalRead(BUTTON_PIN);
+
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+      if (buttonState == HIGH) {
+        buttonPressCount++;
+        if (buttonPressCount == 3) {
+          sendAlert();
+          buttonPressCount = 0;
+        }
+      }
+    }
+  }
+
+  lastButtonState = reading;
+
+  if (ldrStatus <= THRESHOLD) {
+    nightMode();
+  } else {
+    dayMode();
+  }
+}
+
+void nightMode() {
+  digitalWrite(LED_VERDE, LOW);
+  digitalWrite(LED_VERMELHO, LOW);
+  digitalWrite(LED_AMARELO, HIGH);
+  delay(500);
+  digitalWrite(LED_AMARELO, LOW);
+  delay(500);
+}
+
+void dayMode() {
+  digitalWrite(LED_VERDE, HIGH);
+  delay(3000);
+  digitalWrite(LED_VERDE, LOW);
+  digitalWrite(LED_AMARELO, HIGH);
+  delay(2000);
+  digitalWrite(LED_AMARELO, LOW);
+  digitalWrite(LED_VERMELHO, HIGH);
+  delay(5000);
+  digitalWrite(LED_VERMELHO, LOW);
+}
+
+void sendAlert() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin("http://www.google.com.br/");
+    int httpResponseCode = http.GET();
+    if (httpResponseCode > 0) {
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
+    } else {
+      Serial.print("Error code: ");
+      Serial.println(httpResponseCode);
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected");
+  }
+}
